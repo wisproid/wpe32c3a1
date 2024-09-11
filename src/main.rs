@@ -17,6 +17,7 @@ use esp_hal::{
     peripherals::Peripherals,
     system::SystemControl,
     timer::timg::TimerGroup,
+    prelude::*
 };
 
 #[embassy_executor::task]
@@ -39,10 +40,19 @@ async fn main(spawner: Spawner) {
     let timg0 = TimerGroup::new(peripherals.TIMG0, &clocks);
     esp_hal_embassy::init(&clocks, timg0.timer0);
 
-    spawner.spawn(run()).ok();
+    // Enable the RWDT watchdog timer:
+    let timg1 = TimerGroup::new(peripherals.TIMG1, &clocks);
+    let mut wdt0 = timg1.wdt;
+    wdt0.enable();
+    wdt0.set_timeout(10u64.secs());
+    log::info!("Watchdog enabled!");
 
+    spawner.spawn(run()).ok();
+    let mut count = 1000;
     loop {
         esp_println::println!("Bing!");
-        Timer::after(Duration::from_millis(5_000)).await;
+        wdt0.feed();
+        Timer::after(Duration::from_millis(count)).await;
+        count = count + 1000;
     }
 }
